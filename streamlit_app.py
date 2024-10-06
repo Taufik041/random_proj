@@ -12,7 +12,7 @@ emoji_dict = {
     "angry": ["😠", "😡", "🤬", "💢"],
     "surprised": ["😮", "😲", "😯", "🤯"],
     "sana": ["💖", "🥰"],
-    "taufik": ["😎","❤️ u 2"],
+    "taufik": ["😎","❤️ u too"],
     # Add more mappings here
 }
 
