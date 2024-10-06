@@ -90,7 +90,7 @@ if st.button("Convert"):
         with st.spinner("Converting..."):
             emoji = text_to_emoji(input_text)
         if emoji:
-            st.success(f"Converted emoji: {emoji}")
+            st.success(f"{emoji}")
         else:
             st.warning("Couldn't convert to emoji. Try a different text.")
     else:
