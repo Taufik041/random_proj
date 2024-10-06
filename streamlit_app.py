@@ -80,7 +80,7 @@ def text_to_emoji(text):
             return local_text_to_emoji(text) or "❓"
 
 # Streamlit app
-st.title("Text to Emoji Converter")
+st.title("Text to Emoji")
 
 # Input text
 input_text = st.text_input("Enter text to convert to emoji:")
