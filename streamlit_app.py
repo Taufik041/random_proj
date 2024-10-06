@@ -1,56 +1,97 @@
 import streamlit as st
-from openai import OpenAI
+import requests
+import json
+import time
+import random
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
-)
+# Extended emoji dictionary for local fallback
+emoji_dict = {
+    "happy": ["😊", "😃", "😄", "😁"],
+    "sad": ["😢", "😭", "😞", "☹️"],
+    "love": ["❤️", "😍", "🥰", "💖"],
+    "angry": ["😠", "😡", "🤬", "💢"],
+    "surprised": ["😮", "😲", "😯", "🤯"],
+    "sana": ["💖", "🥰"],
+    "taufik": ["😎","❤️ u 2"],
+    # Add more mappings here
+}
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+def local_text_to_emoji(text):
+    text = text.lower()
+    for key, emojis in emoji_dict.items():
+        if key in text:
+            return random.choice(emojis)
+    return None
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+def text_to_emoji(text):
+    # First, try local conversion
+    local_emoji = local_text_to_emoji(text)
+    if local_emoji:
+        return local_emoji
+    
+    # If local conversion fails, use the Hugging Face API
+    api_key = st.secrets["huggingface_api_key"]
+    url = "https://api-inference.huggingface.co/models/j-hartmann/emotion-english-distilroberta-base"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "inputs": text
+    }
+    
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status()
+            result = response.json()
+            
+            # Map the emotion to an emoji
+            emotion_to_emoji = {
+                "joy": "😄",
+                "sadness": "😢",
+                "anger": "😠",
+                "fear": "😨",
+                "surprise": "😮",
+                "love": "❤️",
+                "neutral": "😐"
+            }
+            
+            # Get the emotion with the highest score
+            top_emotion = max(result[0], key=lambda x: x['score'])['label']
+            return emotion_to_emoji.get(top_emotion, "❓")
+            
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                if attempt < max_retries - 1:
+                    st.warning(f"Rate limit exceeded. Retrying in {2**attempt} seconds...")
+                    time.sleep(2**attempt)  # Exponential backoff
+                else:
+                    st.warning("API unavailable. Using local conversion.")
+                    return local_text_to_emoji(text) or "❓"
+            else:
+                st.error(f"HTTP error occurred: {e}")
+                return local_text_to_emoji(text) or "❓"
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
+            return local_text_to_emoji(text) or "❓"
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+# Streamlit app
+st.title("Text to Emoji Converter")
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+# Input text
+input_text = st.text_input("Enter text to convert to emoji:")
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
-
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+if st.button("Convert"):
+    if input_text:
+        with st.spinner("Converting..."):
+            emoji = text_to_emoji(input_text)
+        if emoji:
+            st.success(f"Converted emoji: {emoji}")
+        else:
+            st.warning("Couldn't convert to emoji. Try a different text.")
+    else:
+        st.warning("Please enter some text to convert.")
